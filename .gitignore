@@ -1,2 +1,4 @@
 /target/
 /initializr/
+.idea
+*.iml

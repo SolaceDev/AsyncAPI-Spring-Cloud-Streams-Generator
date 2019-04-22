@@ -1,20 +1,39 @@
 package com.solace.events.asyncapi.spring.cloud.streams.generator;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-import java.util.regex.Matcher;
-
-import javax.annotation.PostConstruct;
-
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
+import com.github.fge.jackson.JsonLoader;
+import com.github.fge.jsonschema.core.exceptions.ProcessingException;
+import com.github.fge.jsonschema.core.report.ProcessingReport;
+import com.github.fge.jsonschema.main.JsonSchema;
+import com.github.fge.jsonschema.main.JsonSchemaFactory;
+import com.github.javaparser.JavaParser;
+import com.github.javaparser.ast.CompilationUnit;
+import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.comments.LineComment;
+import com.github.javaparser.ast.expr.ClassExpr;
+import com.github.javaparser.ast.expr.TypeExpr;
+import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.utils.SourceRoot;
+import de.dentrassi.asyncapi.AsyncApi;
+import de.dentrassi.asyncapi.Topic;
+import de.dentrassi.asyncapi.generator.java.Generator;
+import de.dentrassi.asyncapi.generator.java.Generator.Builder;
+import de.dentrassi.asyncapi.internal.parser.ParserException;
+import de.dentrassi.asyncapi.internal.parser.YamlParser;
+import io.spring.initializr.generator.ProjectGenerator;
+import io.spring.initializr.generator.ProjectRequest;
+import io.spring.initializr.generator.ProjectRequestResolver;
+import io.spring.initializr.metadata.Dependency;
+import io.spring.initializr.metadata.InitializrMetadata;
+import io.spring.initializr.metadata.InitializrMetadataBuilder;
+import io.spring.initializr.metadata.InitializrProperties;
+import io.spring.initializr.metadata.SimpleInitializrMetadataProvider;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.config.YamlPropertiesFactoryBean;
 import org.springframework.boot.SpringApplication;
@@ -35,45 +54,27 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.integration.annotation.InboundChannelAdapter;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import com.github.fge.jackson.JsonLoader;
-import com.github.fge.jsonschema.core.exceptions.ProcessingException;
-import com.github.fge.jsonschema.core.report.ProcessingReport;
-import com.github.fge.jsonschema.main.JsonSchema;
-import com.github.fge.jsonschema.main.JsonSchemaFactory;
-import com.github.javaparser.JavaParser;
-import com.github.javaparser.ast.CompilationUnit;
-import com.github.javaparser.ast.Modifier;
-import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
-import com.github.javaparser.ast.body.MethodDeclaration;
-import com.github.javaparser.ast.comments.LineComment;
-import com.github.javaparser.ast.expr.ClassExpr;
-import com.github.javaparser.ast.expr.TypeExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.utils.CodeGenerationUtils;
-import com.github.javaparser.utils.SourceRoot;
-
-import de.dentrassi.asyncapi.AsyncApi;
-import de.dentrassi.asyncapi.Topic;
-import de.dentrassi.asyncapi.generator.java.Generator;
-import de.dentrassi.asyncapi.generator.java.Generator.Builder;
-import de.dentrassi.asyncapi.internal.parser.ParserException;
-import de.dentrassi.asyncapi.internal.parser.YamlParser;
-import io.spring.initializr.generator.ProjectGenerator;
-import io.spring.initializr.generator.ProjectRequest;
-import io.spring.initializr.generator.ProjectRequestResolver;
-import io.spring.initializr.metadata.Dependency;
-import io.spring.initializr.metadata.InitializrMetadata;
-import io.spring.initializr.metadata.InitializrMetadataBuilder;
-import io.spring.initializr.metadata.InitializrProperties;
-import io.spring.initializr.metadata.SimpleInitializrMetadataProvider;
+import javax.annotation.PostConstruct;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.Reader;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+import java.util.regex.Matcher;
 
 @SpringBootApplication
 @EnableConfigurationProperties(InitializrProperties.class)
 @PropertySource("classpath:application.properties")
+@Slf4j
 // @EnableAutoConfiguration
 public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 
@@ -101,20 +102,19 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 	@PostConstruct
 	public void generateSCS() throws Exception, IOException, ProcessingException, ParserException {
 		// Validate Contract against asyncapi schema
-		if (!this.validateContract(new File("src/main/resources/asyncapi.json"),
-				new File("src/main/resources/oneof.yml"))) {
+		if (!this.validateContract(readResourceFile("asyncapi.json"), readResourceFile("oneof.yml"))) {
 			return;
 		}
 
-		// Take AsyncAPI Contract and parse into a signature object 
-		YamlParser yamlParser = new YamlParser(new FileInputStream(new File(scsGenProps.getAsyncAPIfile())));
+		// Take AsyncAPI Contract and parse into a signature object
+		YamlParser yamlParser = new YamlParser(readResourceFile(scsGenProps.getAsyncAPIfile()));
 		this.asyncApiData = yamlParser.parse();
 		this.signature = extractSignature(asyncApiData);
 
-		// Generate Spring Project though Spring Initializer based on properties 
+		// Generate Spring Project though Spring Initializer based on properties
 		ProjectRequest projectRequest = scsProjectRequest.getProjectRequest();
 		File out = generateInitilizrProject(projectRequest);
-		
+
 		//Generate Java Objects based off of publish/subscribe models defined in the Contract
 		generateObjectModel(out);
 
@@ -122,7 +122,7 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 		String source = generateSourceCode(out, projectRequest);
 		System.out.println(source);
 
-		// Generate Application.Yaml file which links the SCS Bindings to the Solace Binder 
+		// Generate Application.Yaml file which links the SCS Bindings to the Solace Binder
 		String yamlConfig = generateApplicationYaml(out, projectRequest);
 		System.out.println(yamlConfig);
 	}
@@ -132,7 +132,7 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 		output.write(text.getBytes());
 		output.close();
 	}
-	
+
 	private void generateObjectModel(File out) throws IOException
 	{
 		final Builder builder = Generator.newBuilder();
@@ -164,15 +164,14 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 		projectGenerator.setEventPublisher(this);
 		File out = projectGenerator.generateProjectStructure(projectRequest);
 		System.out.println(out);
-		
+
 		return out;
 	}
 
 	private String generateSourceCode(File initilizrOutputDirectory, ProjectRequest projectRequest) throws Exception {
 		// Add required source code based on contract
-		SourceRoot sourceRoot = new SourceRoot(CodeGenerationUtils.mavenModuleRoot(SpringCloudStreamsGenerator.class)
-				.resolve(initilizrOutputDirectory.getAbsolutePath() + File.separator + scsGenProps.getBaseDir()
-						+ "/src/main/java"));
+		SourceRoot sourceRoot = new SourceRoot(Paths.get(
+				initilizrOutputDirectory.getAbsolutePath(), scsGenProps.getBaseDir(), "src", "main", "java"));
 		CompilationUnit cu = sourceRoot.parse(projectRequest.getPackageName(), projectRequest.getName() + "Application.java");
 		cu.addImport(scsGenProps.getPackageName() + ".types.*");
 		cu.addImport(scsGenProps.getPackageName() + ".messages.*");
@@ -261,10 +260,9 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 		ObjectNode file = (ObjectNode) mapper.createObjectNode().set("spring", mapper.createObjectNode().set("cloud",
 				mapper.createObjectNode().set("stream", mapper.convertValue(bsp, ObjectNode.class))));
 		String output = mapper.writeValueAsString(file);
-		SourceRoot sourceRoot = new SourceRoot(CodeGenerationUtils.mavenModuleRoot(SpringCloudStreamsGenerator.class)
-				.resolve(initilizrOutputDirectory.getAbsolutePath() + File.separator + scsGenProps.getBaseDir()
-						+ "/src/main/resources"));
-		writeFile(new File(sourceRoot.getRoot().toString() + File.separator + "application.yml"), output);
+		SourceRoot resourceRoot = new SourceRoot(Paths.get(
+				initilizrOutputDirectory.getAbsolutePath(), scsGenProps.getBaseDir(), "src", "main", "resources"));
+		writeFile(new File(resourceRoot.getRoot().toString() + File.separator + "application.yml"), output);
 		return output;
 	}
 
@@ -301,10 +299,10 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 		return signature;
 	}
 
-	private boolean validateContract(File asyncApiSchema, File asyncApiInstance) throws Exception {
+	private boolean validateContract(Reader asyncApiSchema, Reader asyncApiInstance) throws Exception {
 		ObjectMapper yamlReader = new ObjectMapper(new YAMLFactory());
 		final JsonNode asyncApiInstanceModel = yamlReader.readValue(asyncApiInstance, JsonNode.class);
-		final JsonSchema schema = JsonSchemaFactory.byDefault().getJsonSchema(JsonLoader.fromFile(asyncApiSchema));
+		final JsonSchema schema = JsonSchemaFactory.byDefault().getJsonSchema(JsonLoader.fromReader(asyncApiSchema));
 		ProcessingReport report;
 		report = schema.validate(asyncApiInstanceModel);
 		if (report.isSuccess()) {
@@ -359,5 +357,18 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 		private String publishMessageType = null;
 		private String subscribeTopic = null;
 		private String subscribeMessageType = null;
+	}
+
+	private Reader readResourceFile(String relPath) {
+		final InputStream inputStream = Thread.currentThread()
+				.getContextClassLoader()
+				.getResourceAsStream(relPath);
+
+		if (inputStream != null) {
+			return new InputStreamReader(inputStream);
+		} else {
+			throw new RuntimeException(new FileNotFoundException(
+					String.format("Could not find resource %s", relPath)));
+		}
 	}
 }
