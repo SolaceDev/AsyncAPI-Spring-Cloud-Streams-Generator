@@ -1,3 +1,5 @@
+# Overview
+
 Purpose of this Generator is to ease development of Spring Cloud Streams microservices by supporting defining them in AsyncAPI. The problem was decomposed into the following parts:
 1) Generate Project Structure 
 Project structure and build is taken care of by the Spring Initializr project, and thus was reused. 
@@ -8,23 +10,27 @@ In order to generate the SCS Application, the associated java class must have th
 4) Generate Application.YAML - binds the application to the runtime though binder interface 
 The Application.yaml file purpose is to map the INPUTS/OUTPUTS to the underling binding implementation. In this case, this generator works with Solace's but could easily be extended to support others. 
 
-How to run it: 
-1) update the application.propertes (Since its in src/main/resources, it expects it to be in the jar) An example is shown below: 
-scs.scsType=PROCESSOR 
-scs.packageName=com.solace.test.processor
-scs.baseDir=SCSProcessorproject
-scs.asyncAPIfile=asyncapi-basic-example-processor.yml
-spring.initializr.name=DemoScsProcessor
-spring.initializr.artifactId=DemoScsProcessor
-spring.initializr.groupId=com.solace.test.processor
-spring.initializr.version=0.0.1
-spring.initializr.description=thisIsADescription
-spring.initializr.packageName=com.solace.test.processor
-spring.initializr.javaVersion=1.8
-spring.initializr.language=java
-spring.initializr.baseDir=SCSProcessorproject
-spring.initializr.bootVersion=2.0.3.RELEASE
-spring.initializr.type=maven-build
-spring.initializr.packaging=jar
-2) run the jar file 
-The output ends up in the initializr directory relative to where you run it. 
+# Quick Setup
+## Building the Project
+1. Clone the Github repository
+1. `cd AsyncAPI-Spring-Cloud-Streams-Generator`
+1. Update the [application.propertes](./src/main/resources/application.properties) to have suitable defaults
+1. `mvn clean package`
+
+## Generating an Application
+1. `java -jar target/AsyncAPI-SpringCloudStreams-Generator-0.0.1-SNAPSHOT.jar`
+
+   You may also override your default application properties using the `-D<name>=<value>` Java CLI parameters.
+   
+   For example, you can force the generation of a source application with:
+   ```bash
+   java -Dscs.scsType=SOURCE -jar target/AsyncAPI-SpringCloudStreams-Generator-0.0.1-SNAPSHOT.jar
+   ```
+   
+   Please refer to [SpringCloudStreamsGeneratorProperties.java](./src/main/java/com/solace/events/asyncapi/spring/cloud/streams/generator/SpringCloudStreamsGeneratorProperties.java) for the most up-to-date set of configuration properties.
+2. The application is now generated into the `initializr` directory relative to where you run it (`AsyncAPI-Spring-Cloud-Streams-Generator/tmp{{Random Numbers}}/{{scs.baseDir}}` in our case).
+
+## Running the Generated Application
+1. `cd AsyncAPI-Spring-Cloud-Streams-Generator/tmp{{Random Numbers}}/{{scs.baseDir}}`
+2. Update `src/main/resources/application.yml` with the connection credentials to your messaging infrastructure
+3. `mvn spring-boot:run`
