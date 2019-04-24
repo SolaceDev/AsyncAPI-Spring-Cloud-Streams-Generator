@@ -12,12 +12,16 @@ import com.github.fge.jsonschema.main.JsonSchemaFactory;
 import com.github.javaparser.JavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.Modifier;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.comments.LineComment;
 import com.github.javaparser.ast.expr.ClassExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.TypeExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
+import com.github.javaparser.ast.stmt.ReturnStmt;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.utils.SourceRoot;
 import de.dentrassi.asyncapi.AsyncApi;
 import de.dentrassi.asyncapi.Topic;
@@ -64,6 +68,7 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -214,6 +219,16 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 
 		BlockStmt body = method.createBody();
 		body.addOrphanComment(new LineComment("Add Business Logic Here."));
+
+		switch (scsGenProps.getScsType()) {
+			case SpringCloudStreamsGeneratorProperties.PROCESSOR:
+			case SpringCloudStreamsGeneratorProperties.SOURCE:
+				ClassOrInterfaceType returnType = JavaParser.parseClassOrInterfaceType(signature.getPublishMessageType());
+				ObjectCreationExpr createEmptyReturnMsg = new ObjectCreationExpr(null, returnType, new NodeList<>());
+				body.addStatement(new ReturnStmt(createEmptyReturnMsg));
+				break;
+		}
+
 		writeFile(new File(sourceRoot.getRoot().toString() + File.separator
 				+ projectRequest.getPackageName().replaceAll("\\.", Matcher.quoteReplacement(File.separator))
 				+ File.separator + projectRequest.getName() + "Application.java"), cu.toString());
@@ -243,7 +258,7 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 		binderprops.setType("rabbit");
 		Map<String, Object> environment = new HashMap<String, Object>();
 		Map<String, Object> rabbitEnv = new HashMap<String, Object>();
-		environment.put("spring", rabbitEnv);
+		environment.put("spring", Collections.singletonMap("rabbitmq", rabbitEnv));
 		String[] hostSplit = asyncApiData.getHost().split(":");
 		rabbitEnv.put("host", hostSplit[0]);
 		rabbitEnv.put("port", hostSplit[1]);
