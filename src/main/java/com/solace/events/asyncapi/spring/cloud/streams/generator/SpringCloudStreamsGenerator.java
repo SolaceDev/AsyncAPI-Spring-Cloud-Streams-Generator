@@ -154,8 +154,8 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 		List<String> dependencies = new ArrayList<String>();
 
 		dependencies.add("cloud-stream");
-		dependencies.add("amqp");
-		dependencies.add("rabbitmq-binder");
+		dependencies.add("solace-binder");
+		dependencies.add("web");
 		projectRequest.setDependencies(dependencies);
 
 		// Below does not work...
@@ -238,42 +238,41 @@ public class SpringCloudStreamsGenerator implements ApplicationEventPublisher {
 	private String generateApplicationYaml(File initilizrOutputDirectory, ProjectRequest projectRequest)
 			throws Exception {
 		BindingServiceProperties bsp = new BindingServiceProperties();
-		Map<String, BindingProperties> bindingMap = new HashMap<String, BindingProperties>();
+		Map<String, BindingProperties> bindingMap = new HashMap<>();
 		if (scsGenProps.getScsType().compareTo(SpringCloudStreamsGeneratorProperties.PROCESSOR) == 0
 				|| scsGenProps.getScsType().compareTo(SpringCloudStreamsGeneratorProperties.SINK) == 0) {
 			BindingProperties bpSubscribe = new BindingProperties();
-			bpSubscribe.setBinder("local_rabbit");
+			bpSubscribe.setBinder("local_solace");
 			bpSubscribe.setDestination(signature.getSubscribeTopic());
 			bindingMap.put("input", bpSubscribe);
 		}
 		if (scsGenProps.getScsType().compareTo(SpringCloudStreamsGeneratorProperties.PROCESSOR) == 0
 				|| scsGenProps.getScsType().compareTo(SpringCloudStreamsGeneratorProperties.SOURCE) == 0) {
 			BindingProperties bpPublish = new BindingProperties();
-			bpPublish.setBinder("local_rabbit");
+			bpPublish.setBinder("local_solace");
 			bpPublish.setDestination(signature.getPublishTopic());
 			bindingMap.put("output", bpPublish);
 		}
 		bsp.setBindings(bindingMap);
 		BinderProperties binderprops = new BinderProperties();
-		binderprops.setType("rabbit");
+		binderprops.setType("solace");
 		Map<String, Object> environment = new HashMap<String, Object>();
-		Map<String, Object> rabbitEnv = new HashMap<String, Object>();
-		environment.put("spring", Collections.singletonMap("rabbitmq", rabbitEnv));
-		String[] hostSplit = asyncApiData.getHost().split(":");
-		rabbitEnv.put("host", hostSplit[0]);
-		rabbitEnv.put("port", hostSplit[1]);
-		rabbitEnv.put("username", "guest");
-		rabbitEnv.put("password", "guest");
-		rabbitEnv.put("virtual-host", "/");
+		Map<String, Object> solaceEnv = new HashMap<String, Object>();
+		environment.put("solace", Collections.singletonMap("java", solaceEnv));
+		solaceEnv.put("host", asyncApiData.getHost());
+		solaceEnv.put("msgVpn", "default");
+		solaceEnv.put("clientUsername", "default");
+		solaceEnv.put("clientPassword", "default");
 
 		binderprops.setEnvironment(environment);
 		HashMap<String, BinderProperties> config = new HashMap<String, BinderProperties>();
-		config.put("local_rabbit", binderprops);
+		config.put("local_solace", binderprops);
 		bsp.setBinders(config);
 
 		ObjectMapper mapper = new ObjectMapper(new YAMLFactory());
-		ObjectNode file = (ObjectNode) mapper.createObjectNode().set("spring", mapper.createObjectNode().set("cloud",
-				mapper.createObjectNode().set("stream", mapper.convertValue(bsp, ObjectNode.class))));
+		ObjectNode file = mapper.createObjectNode();
+		file.set("spring", mapper.createObjectNode().set("cloud", mapper.createObjectNode().set("stream", mapper.convertValue(bsp, ObjectNode.class))));
+		file.set("server", mapper.createObjectNode().put("port", 0));
 		String output = mapper.writeValueAsString(file);
 		SourceRoot resourceRoot = new SourceRoot(Paths.get(
 				initilizrOutputDirectory.getAbsolutePath(), scsGenProps.getBaseDir(), "src", "main", "resources"));

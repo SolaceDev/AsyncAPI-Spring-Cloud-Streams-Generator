@@ -174,13 +174,14 @@ initializr:
         url: https://oss.sonatype.org/content/repositories/snapshots/
         snapshotsEnabled: true
   dependencies:
-    - name: Rabbit-Spring-Cloud-Stream-Binder
+    - name: Solace-Spring-Cloud-Stream-Binder
       content:
-        - name: rabbitmq-binder
-          id: rabbitmq-binder
-          groupId: org.springframework.cloud
-          artifactId: spring-cloud-stream-binder-rabbit
-          description: Added By Jonathan Schabowsky
+        - name: solace-binder
+          id: solace-binder
+          groupId: com.solace.spring.cloud
+          artifactId: spring-cloud-stream-binder-solace
+          version: 1.0.0
+          description: Spring Cloud Stream Binder for using Spring Cloud Stream with Solace
     - name: Core
       content:
         - name: DevTools
